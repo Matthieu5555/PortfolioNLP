@@ -16,8 +16,7 @@ __all__ = [
     "DATA_DIR",
     "UniverseConfig",
     "EmbeddingConfig",
-    "MuConfig",
-    "SigmaConfig",
+
     "CovarianceConfig",
     "PortfolioConfig",
     "BacktestConfig",
@@ -28,14 +27,6 @@ __all__ = [
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
-# Structured data subdirectories (migration pending — currently files live
-# directly in DATA_DIR for backward compatibility):
-#   RAW_DIR:       immutable downloads (filings, transcripts, prices, SIC codes)
-#   PROCESSED_DIR: derived artifacts (embeddings, store metadata)
-#   RESULTS_DIR:   experiment outputs (backtests, ablations, figures)
-RAW_DIR = DATA_DIR / "raw"
-PROCESSED_DIR = DATA_DIR / "processed"
-RESULTS_DIR = DATA_DIR / "results"
 
 
 # ---------------------------------------------------------------------------
@@ -88,45 +79,6 @@ class EmbeddingConfig:
 # ---------------------------------------------------------------------------
 # Portfolio Primitives
 # ---------------------------------------------------------------------------
-@dataclass(frozen=True)
-class MuConfig:
-    """Expected return proxy construction from embedding geometry.
-
-    method:
-        'returns_direction' — supervised: ridge regression to find the
-            direction in R^768 maximally correlated with forward returns.
-        'cluster_distance' — semi-supervised: k-means clusters labeled by
-            average realized return; score by distance to high vs low clusters.
-        'temporal_drift' — unsupervised: direction and magnitude of embedding
-            movement between consecutive filing periods.
-    horizon_days: forward return horizon for supervised fitting (~63 = quarterly).
-    regularization: L2 penalty for returns_direction ridge regression.
-        Critical: 768 dims, ~2000 firms. Without strong penalty = overfitting.
-    n_clusters: number of semantic clusters for cluster_distance method.
-    """
-
-    method: str = "returns_direction"
-    horizon_days: int = 63
-    regularization: float = 100.0
-    n_clusters: int = 10
-
-
-@dataclass(frozen=True)
-class SigmaConfig:
-    """Volatility proxy construction from embedding dispersion.
-
-    method:
-        'dispersion' — std dev of a firm's document embeddings around its
-            centroid. Inconsistent language across filings = higher risk.
-        'centroid_distance' — distance from sector centroid. Semantically
-            unusual firms are harder to price = riskier.
-        'entropy' — differential entropy of the local embedding distribution.
-    window_days: lookback window for computing dispersion.
-    """
-
-    method: str = "dispersion"
-    window_days: int = 365
-
 
 @dataclass(frozen=True)
 class CovarianceConfig:
@@ -135,8 +87,6 @@ class CovarianceConfig:
     method:
         'cosine' — cosine similarity of firm embeddings as correlation proxy.
             PSD by construction (Gram matrix). Combined with sigma estimates.
-        'energy_distance' — Gawronsky & Huang (2024). Treats each firm's
-            document set as a distribution; computes pairwise energy distance.
         'shrinkage' — EMNLP 2023: shrink sample covariance toward semantic
             similarity target. Hybrid: uses both text and prices.
     shrinkage_intensity: for 'shrinkage' method. 'auto' = Ledoit-Wolf oracle.

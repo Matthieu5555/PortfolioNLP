@@ -22,21 +22,6 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["Firm", "UniverseLoader"]
 
-# GICS sector mapping for sector ETFs (same as MCF)
-SECTOR_ETFS: dict[str, str] = {
-    "Technology": "XLK",
-    "Financials": "XLF",
-    "Energy": "XLE",
-    "Healthcare": "XLV",
-    "Consumer Discretionary": "XLY",
-    "Consumer Staples": "XLP",
-    "Industrials": "XLI",
-    "Materials": "XLB",
-    "Real Estate": "XLRE",
-    "Utilities": "XLU",
-    "Communication Services": "XLC",
-}
-
 
 @dataclass(frozen=True)
 class Firm:

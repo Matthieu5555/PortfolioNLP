@@ -1063,37 +1063,37 @@ The key insight is not that text is *better* than returns — at low p/n with fu
 uv sync
 
 # Download data (requires Tiingo API key in .env)
-uv run python scripts/download_data.py all
-uv run python scripts/fetch_filing_dates.py
-uv run python scripts/clean_filings_index.py
+uv run python pipeline/download_data.py all
+uv run python pipeline/fetch_filing_dates.py
+uv run python pipeline/clean_filings_index.py
 
 # Embed text (resumes from checkpoint)
-uv run python scripts/embed_filings.py           # ~4,592 tickers, ~2 hours
-uv run python scripts/embed_transcripts.py        # ~608 tickers, ~1 hour
+uv run python pipeline/embed_filings.py           # ~4,592 tickers, ~2 hours
+uv run python pipeline/embed_transcripts.py        # ~608 tickers, ~1 hour
 
 # Run experiments
-uv run python scripts/run_backtest.py                                          # 10-K, p=500
-uv run python scripts/run_backtest.py --text-source transcript --max-firms 500 # Transcript, p=500
-uv run python scripts/run_backtest.py --text-source combined --max-firms 500   # Combined, p=500
-uv run python scripts/run_scaling_experiment.py --p-grid 50,100,200,500,1000,1500,2000
-uv run python scripts/run_robustness.py --all --returns-file <path>            # FF, SPY, shuffle, TC
-uv run python scripts/run_backtest.py --start 2013-04-01 --end 2018-06-30     # Sub-period 1
-uv run python scripts/run_backtest.py --start 2019-01-01 --end 2024-06-30     # Sub-period 2
-uv run python scripts/run_block_sensitivity.py --returns-file <path>           # Block size sensitivity
+uv run python experiments/run_backtest.py                                          # 10-K, p=500
+uv run python experiments/run_backtest.py --text-source transcript --max-firms 500 # Transcript, p=500
+uv run python experiments/run_backtest.py --text-source combined --max-firms 500   # Combined, p=500
+uv run python experiments/run_scaling_experiment.py --p-grid 50,100,200,500,1000,1500,2000
+uv run python experiments/run_robustness.py --all --returns-file <path>            # FF, SPY, shuffle, TC
+uv run python experiments/run_backtest.py --start 2013-04-01 --end 2018-06-30     # Sub-period 1
+uv run python experiments/run_backtest.py --start 2019-01-01 --end 2024-06-30     # Sub-period 2
+uv run python experiments/run_block_sensitivity.py --returns-file <path>           # Block size sensitivity
 
-uv run python scripts/run_pca_experiment.py --k-grid 1,3,5,10,20,50,100        # PCA k-sweep
-uv run python scripts/run_alpha_sweep.py --p-grid 200,500 --text-source 10k    # Alpha sweep + cold-start
-uv run python scripts/run_pca_interpretation.py --n-components 10 --max-firms 500  # PCA interpretation
-uv run python scripts/run_shuffle_gradient.py --p-grid 2000 --n-shuffles 10    # Shuffle gradient
-uv run python scripts/fetch_sic_codes.py                                        # SIC codes from EDGAR
-uv run python scripts/run_beta_experiment.py --max-firms 500                    # Text-based beta
-uv run python scripts/run_var_experiment.py --p-grid 200,500,1000,2000          # VaR calibration
-uv run python scripts/run_sector_analysis.py --max-firms 200                    # Text vs SIC codes
-uv run python scripts/run_lookback_ablation.py --max-firms 500                  # Return history ablation
-uv run python scripts/run_cold_start_experiment.py --max-firms 500              # Cold-start simulation
-uv run python scripts/run_cv_alpha_experiment.py --max-firms 500                # CV-alpha calibration
-uv run python scripts/run_constrained_experiment.py --max-firms 500             # Constrained optimization
-uv run python scripts/run_multitarget_experiment.py --p-grid 200,500            # Multi-target shrinkage
+uv run python experiments/run_pca_experiment.py --k-grid 1,3,5,10,20,50,100        # PCA k-sweep
+uv run python experiments/run_alpha_sweep.py --p-grid 200,500 --text-source 10k    # Alpha sweep + cold-start
+uv run python experiments/run_pca_interpretation.py --n-components 10 --max-firms 500  # PCA interpretation
+uv run python experiments/run_shuffle_gradient.py --p-grid 2000 --n-shuffles 10    # Shuffle gradient
+uv run python pipeline/fetch_sic_codes.py                                          # SIC codes from EDGAR
+uv run python experiments/run_beta_experiment.py --max-firms 500                    # Text-based beta
+uv run python experiments/run_var_experiment.py --p-grid 200,500,1000,2000          # VaR calibration
+uv run python experiments/run_sector_analysis.py --max-firms 200                    # Text vs SIC codes
+uv run python experiments/run_lookback_ablation.py --max-firms 500                  # Return history ablation
+uv run python experiments/run_cold_start_experiment.py --max-firms 500              # Cold-start simulation
+uv run python experiments/run_cv_alpha_experiment.py --max-firms 500                # CV-alpha calibration
+uv run python experiments/run_constrained_experiment.py --max-firms 500             # Constrained optimization
+uv run python experiments/run_multitarget_experiment.py --p-grid 200,500            # Multi-target shrinkage
 
 # Run tests (70 tests)
 uv run pytest tests/ -v
@@ -1114,21 +1114,22 @@ pnlp/                          # Core library
     firm_aggregator.py         # Documents -> firm embedding (L2-norm here only)
   primitives/                  # Statistical estimators
     covariance.py              # SemanticShrinkageCovariance, PCAFactorCovariance
-    mu.py                      # Expected return proxies
-    sigma.py                   # Volatility proxies (DispersionSigma, TemporalPCASigma)
+    gpu_accel.py               # PSD enforcement, Ledoit-Wolf shrinkage
   portfolio/                   # Optimization
-    optimizer.py               # CVXP/SLSQP min-variance, max-sharpe, risk-parity
-    rebalancer.py              # Quarterly rebalancing logic
+    optimizer.py               # CVXPY/OSQP min-variance, max-sharpe, risk-parity
   baselines/                   # Comparison strategies
     shrinkage.py               # Ledoit-Wolf (sklearn)
     equal_weight.py            # 1/N
+    sic_sector.py              # SIC sector block-diagonal covariance
   validation/                  # Backtest and evaluation
     backtest.py                # Walk-forward engine with per-ticker TC
     metrics.py                 # Sharpe, Sortino, drawdown, CAPM
     statistical_tests.py       # Block permutation, Lo correction
     transaction_costs.py       # Stratified ADV-tiered TC model
-scripts/                       # Experiment entrypoints
-tests/                         # 57 tests using synthetic data factories
+    var_tests.py               # Kupiec, Christoffersen VaR backtests
+experiments/                   # Experiment entrypoints (run_*.py)
+pipeline/                      # Data download, embedding, audit scripts
+tests/                         # Test suite using synthetic data factories
 ```
 
 ### 7.5 Test Suite

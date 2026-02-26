@@ -1,4 +1,4 @@
-"""Tests for the portfolio primitives (mu, sigma, covariance)."""
+"""Tests for the covariance primitives."""
 
 from __future__ import annotations
 
@@ -6,15 +6,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pnlp.config import CovarianceConfig, MuConfig, SigmaConfig
+from pnlp.config import CovarianceConfig
 from pnlp.primitives.covariance import (
     CosineSimilarityCovariance,
     PCAFactorCovariance,
     SemanticShrinkageCovariance,
     _ensure_psd,
 )
-from pnlp.primitives.mu import ClusterDistanceMu, ReturnsDirectionMu
-from pnlp.primitives.sigma import CentroidDistanceSigma, DispersionSigma, TemporalPCASigma
 
 
 class TestEnsurePSD:
@@ -76,56 +74,6 @@ class TestSemanticShrinkageCovariance:
         assert cov.shape[0] == len(firm_embeddings)
 
 
-class TestDispersionSigma:
-    def test_output_length(self, firm_embeddings, doc_embeddings):
-        sigma = DispersionSigma().estimate(firm_embeddings, doc_embeddings)
-        assert len(sigma) == len(firm_embeddings)
-
-    def test_non_negative(self, firm_embeddings, doc_embeddings):
-        sigma = DispersionSigma().estimate(firm_embeddings, doc_embeddings)
-        assert (sigma >= 0).all()
-
-    def test_without_docs_returns_uniform(self, firm_embeddings):
-        sigma = DispersionSigma().estimate(firm_embeddings)
-        assert (sigma == 1.0).all()
-
-
-class TestCentroidDistanceSigma:
-    def test_output_length(self, firm_embeddings):
-        sigma = CentroidDistanceSigma().estimate(firm_embeddings)
-        assert len(sigma) == len(firm_embeddings)
-
-    def test_normalized_mean_one(self, firm_embeddings):
-        sigma = CentroidDistanceSigma().estimate(firm_embeddings)
-        assert abs(sigma.mean() - 1.0) < 0.01
-
-
-class TestReturnsDirectionMu:
-    def test_fit_predict(self, firm_embeddings, daily_returns):
-        mu_est = ReturnsDirectionMu(MuConfig(regularization=1.0))
-        # Use cumulative returns as training signal
-        historical = daily_returns.sum()
-        mu_est.fit(firm_embeddings, historical)
-        predictions = mu_est.predict(firm_embeddings)
-        assert len(predictions) == len(firm_embeddings)
-        assert predictions.isna().sum() == 0
-
-    def test_unfitted_returns_zeros(self, firm_embeddings):
-        mu_est = ReturnsDirectionMu()
-        predictions = mu_est.predict(firm_embeddings)
-        assert (predictions == 0.0).all()
-
-
-class TestClusterDistanceMu:
-    def test_fit_predict(self, firm_embeddings, daily_returns):
-        config = MuConfig(method="cluster_distance", n_clusters=3)
-        mu_est = ClusterDistanceMu(config)
-        historical = daily_returns.sum()
-        mu_est.fit(firm_embeddings, historical)
-        predictions = mu_est.predict(firm_embeddings)
-        assert len(predictions) == len(firm_embeddings)
-
-
 class TestPCAFactorCovariance:
     def test_output_shape(self, firm_embeddings):
         estimator = PCAFactorCovariance(n_factors=5)
@@ -180,83 +128,3 @@ class TestPCAFactorCovariance:
         # largest to second-largest should be very large
         sorted_ev = np.sort(eigenvalues)[::-1]
         assert sorted_ev[0] / sorted_ev[1] > 10
-
-
-class TestTemporalPCASigma:
-    def test_output_length(self, firm_embeddings, doc_embeddings):
-        sigma = TemporalPCASigma().estimate(firm_embeddings, doc_embeddings)
-        assert len(sigma) == len(firm_embeddings)
-
-    def test_positive(self, firm_embeddings, doc_embeddings):
-        sigma = TemporalPCASigma().estimate(firm_embeddings, doc_embeddings)
-        assert (sigma > 0).all()
-
-    def test_few_docs_fallback(self, firm_embeddings):
-        """Firms with < 3 docs should get sigma ~ 1.0."""
-        from pnlp.embeddings.document_embedder import DocumentEmbedding
-        from datetime import date
-
-        # Create doc_embeddings with only 1 doc per firm
-        sparse_docs = {}
-        for ticker in firm_embeddings:
-            sparse_docs[ticker] = [
-                DocumentEmbedding(
-                    ticker=ticker,
-                    doc_date=date(2020, 1, 1),
-                    doc_type="10-K",
-                    embedding=firm_embeddings[ticker].embedding,
-                    norm=1.0,
-                    n_chunks=1,
-                )
-            ]
-        sigma = TemporalPCASigma().estimate(firm_embeddings, sparse_docs)
-        # All should be 1.0 (fallback)
-        np.testing.assert_array_almost_equal(sigma.values, np.ones(len(sigma)))
-
-    def test_stable_vs_volatile(self):
-        """Firm with identical docs should have lower sigma than firm with varied docs."""
-        from pnlp.embeddings.document_embedder import DocumentEmbedding
-        from datetime import date
-
-        rng = np.random.RandomState(123)
-        base = rng.randn(768).astype(np.float32)
-        base = base / np.linalg.norm(base)
-
-        # Stable firm: all docs have nearly identical embeddings
-        stable_docs = []
-        for i in range(10):
-            emb = base + rng.randn(768).astype(np.float32) * 0.001
-            emb = emb / np.linalg.norm(emb)
-            stable_docs.append(DocumentEmbedding(
-                ticker="STABLE", doc_date=date(2020, 1, 1) + pd.Timedelta(days=i * 90),
-                doc_type="10-K", embedding=emb, norm=1.0, n_chunks=1,
-            ))
-
-        # Volatile firm: docs vary wildly
-        volatile_docs = []
-        for i in range(10):
-            emb = rng.randn(768).astype(np.float32)
-            emb = emb / np.linalg.norm(emb)
-            volatile_docs.append(DocumentEmbedding(
-                ticker="VOLATILE", doc_date=date(2020, 1, 1) + pd.Timedelta(days=i * 90),
-                doc_type="10-K", embedding=emb, norm=1.0, n_chunks=1,
-            ))
-
-        from pnlp.embeddings.firm_aggregator import FirmEmbedding
-        firm_embs = {
-            "STABLE": FirmEmbedding(ticker="STABLE", as_of_date=date(2024, 1, 1), embedding=base, n_documents=10),
-            "VOLATILE": FirmEmbedding(ticker="VOLATILE", as_of_date=date(2024, 1, 1), embedding=base, n_documents=10),
-        }
-        doc_embs = {"STABLE": stable_docs, "VOLATILE": volatile_docs}
-
-        sigma = TemporalPCASigma().estimate(firm_embs, doc_embs)
-        assert sigma["STABLE"] < sigma["VOLATILE"]
-
-    def test_concentration_ratios_stored(self, firm_embeddings, doc_embeddings):
-        estimator = TemporalPCASigma()
-        estimator.estimate(firm_embeddings, doc_embeddings)
-        assert len(estimator.concentration_ratios_) == len(firm_embeddings)
-        # All concentration ratios should be between 0 and 1
-        for ticker, cr in estimator.concentration_ratios_.items():
-            if not np.isnan(cr):
-                assert 0 <= cr <= 1

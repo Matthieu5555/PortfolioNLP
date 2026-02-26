@@ -12,8 +12,6 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 import pandas as pd
-from scipy.spatial.distance import cdist
-
 from pnlp.config import CovarianceConfig
 from pnlp.embeddings.firm_aggregator import FirmEmbedding
 
@@ -22,7 +20,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "CovarianceEstimator",
     "CosineSimilarityCovariance",
-    "EnergyDistanceCovariance",
+
     "MultiTargetShrinkageCovariance",
     "PCAFactorCovariance",
     "SemanticShrinkageCovariance",
@@ -111,85 +109,6 @@ class CosineSimilarityCovariance(CovarianceEstimator):
 
         return pd.DataFrame(cov, index=tickers, columns=tickers)
 
-
-class EnergyDistanceCovariance(CovarianceEstimator):
-    """Covariance from Energy Distance (Gawronsky & Huang, 2024).
-
-    Treats each firm's set of document embeddings as a distribution.
-    Energy Distance between distributions X and Y:
-        D(X,Y) = 2*E[||X-Y||] - E[||X-X'||] - E[||Y-Y'||]
-
-    Converted to similarity via: sim = exp(-D / scale), then to
-    covariance by multiplying with sigma estimates.
-
-    Requires the raw per-document embeddings, not just the aggregated
-    firm embedding. Pass these via the doc_embeddings parameter.
-    """
-
-    def __init__(
-        self,
-        config: CovarianceConfig | None = None,
-        doc_embeddings: dict[str, np.ndarray] | None = None,
-    ) -> None:
-        self.config = config or CovarianceConfig()
-        self.doc_embeddings = doc_embeddings or {}
-
-    def _energy_distance(self, X: np.ndarray, Y: np.ndarray) -> float:
-        """Compute energy distance between two sets of vectors."""
-        # E[||X - Y||]
-        cross = cdist(X, Y, metric="euclidean").mean()
-        # E[||X - X'||]
-        if len(X) > 1:
-            within_x = cdist(X, X, metric="euclidean").mean()
-        else:
-            within_x = 0.0
-        # E[||Y - Y'||]
-        if len(Y) > 1:
-            within_y = cdist(Y, Y, metric="euclidean").mean()
-        else:
-            within_y = 0.0
-
-        return 2 * cross - within_x - within_y
-
-    def estimate(
-        self,
-        firm_embeddings: dict[str, FirmEmbedding],
-        sigma_estimates: pd.Series | None = None,
-    ) -> pd.DataFrame:
-        tickers = sorted(firm_embeddings.keys())
-        n = len(tickers)
-
-        if not self.doc_embeddings:
-            logger.warning("No doc_embeddings provided; falling back to cosine similarity")
-            return CosineSimilarityCovariance(self.config).estimate(firm_embeddings, sigma_estimates)
-
-        # Compute pairwise energy distances
-        dist_matrix = np.zeros((n, n))
-        for i in range(n):
-            Xi = self.doc_embeddings.get(tickers[i])
-            if Xi is None or len(Xi) == 0:
-                continue
-            for j in range(i + 1, n):
-                Xj = self.doc_embeddings.get(tickers[j])
-                if Xj is None or len(Xj) == 0:
-                    continue
-                d = self._energy_distance(Xi, Xj)
-                dist_matrix[i, j] = d
-                dist_matrix[j, i] = d
-
-        # Convert distance to similarity
-        scale = np.median(dist_matrix[dist_matrix > 0]) if (dist_matrix > 0).any() else 1.0
-        sim_matrix = np.exp(-dist_matrix / max(scale, 1e-8))
-        np.fill_diagonal(sim_matrix, 1.0)
-
-        if sigma_estimates is not None:
-            sigmas = np.array([sigma_estimates.get(t, 1.0) for t in tickers])
-            cov = sim_matrix * np.outer(sigmas, sigmas)
-        else:
-            cov = sim_matrix
-
-        cov = _ensure_psd(cov, self.config.min_eigenvalue)
-        return pd.DataFrame(cov, index=tickers, columns=tickers)
 
 
 def cross_validate_alpha(

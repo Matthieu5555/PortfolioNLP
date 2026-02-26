@@ -7,7 +7,7 @@ license = "CC-BY-NC-SA-4.0"
 authors = [{ name = "Matthieu Separt" }]
 dependencies = [
     "datasets>=3.0",
-    "faiss-cpu>=1.13.2",
+
     "matplotlib>=3.10",
     "numpy>=2.2",
     "pandas>=2.3",
