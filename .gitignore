@@ -29,10 +29,6 @@ build/
 .ruff_cache/
 .coverage
 
-# Claude Code agent (not part of the project)
-.claude/
-CLAUDE.md
-
 # BMAD workflow artifacts (not part of the project)
 _bmad/
 _bmad-output/
