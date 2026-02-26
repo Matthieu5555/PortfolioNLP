@@ -1,0 +1,59 @@
+[project]
+name = "portfolio-nlp"
+version = "0.1.0"
+description = "Embedding-space portfolio optimization from first principles"
+requires-python = ">=3.13"
+license = "CC-BY-NC-SA-4.0"
+authors = [{ name = "Matthieu Separt" }]
+dependencies = [
+    "datasets>=3.0",
+    "faiss-cpu>=1.13.2",
+    "matplotlib>=3.10",
+    "numpy>=2.2",
+    "pandas>=2.3",
+    "pyarrow>=23.0",
+    "python-dotenv>=1.2",
+    "scikit-learn>=1.7",
+    "scipy>=1.14",
+    "nltk>=3.9",
+    "sentence-transformers>=5.2",
+    "torch>=2.10",
+    "requests>=2.32",
+    "tqdm>=4.67",
+    "cvxpy>=1.8.1",
+    "statsmodels>=0.14.6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+    "mypy>=1.14",
+    "ruff>=0.9",
+    "pandas-stubs>=2.0",
+    "marimo>=0.19",
+    "markdown>=3.10.2",
+    "weasyprint>=68.1",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests that load ML models or download data (deselect with '-m \"not slow\"')",
+]
+
+[tool.setuptools.packages.find]
+include = ["pnlp*"]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
