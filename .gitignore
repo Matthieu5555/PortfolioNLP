@@ -35,3 +35,7 @@ _bmad-output/
 
 # Internal review artifacts
 audit_reports/
+
+# Docs (kept locally, not published)
+docs/
+README.md
